@@ -67,47 +67,55 @@ Features :
 Installs from this fork (`ghunt-fixed`), not the official PyPI `ghunt` package — the PyPI release
 is the one that crashes on `ghunt email` for many accounts.
 
-## Option A — pipx (recommended)
-
-pipx installs `ghunt-fixed` into its own isolated virtual environment automatically and puts the
-`ghunt` command on your `PATH`. Copy-paste the whole block:
+## One-liner (recommended)
 
 ```bash
-python3 -m pip install --user pipx
+curl -fsSL https://raw.githubusercontent.com/Iskandeur/ghunt-fixed/master/install.sh | bash
+```
+
+This runs [`install.sh`](install.sh) — worth a skim before piping it into `bash`, as with any
+install script off the internet. It exists specifically because a plain `pip3 install pipx` fails
+out of the box on current Ubuntu/Debian (`externally-managed-environment`, PEP 668) unless you
+already know the right workaround. The script picks, in order, whichever of these actually works
+on your machine, with **no manual troubleshooting**:
+
+1. Uses `pipx` if it's already installed.
+2. Otherwise installs `pipx` via `apt` (asks for `sudo` once) and uses that.
+3. Otherwise falls back to a dedicated virtual environment at `~/.local/share/ghunt-fixed-venv`,
+   symlinked to `~/.local/bin/ghunt` — no `sudo`, no `pipx`, and immune to PEP 668, since a venv is
+   never "externally managed". This is exactly what `pipx` does under the hood, done by hand.
+
+Open a new terminal afterwards (or `source ~/.bashrc` / `source ~/.zshrc`) if `ghunt` isn't found
+immediately — the script tells you explicitly if that's needed.
+
+Re-run the same command any time to update to the latest commit.
+
+## Manual installation
+
+If you'd rather not pipe a script into `bash`, do what it does yourself:
+
+**On Debian/Ubuntu**, `apt`'s `pipx` avoids the PEP 668 error entirely:
+```bash
+sudo apt update && sudo apt install -y pipx
 pipx ensurepath
+```
+Open a new terminal, then:
+```bash
 pipx install git+https://github.com/Iskandeur/ghunt-fixed.git
 ```
+To update later: `pipx upgrade ghunt-fixed`
 
-Open a new terminal (or run `source ~/.bashrc`, or `source ~/.zshrc` if you use zsh) if `ghunt` isn't
-found immediately after install — `pipx ensurepath` only takes effect in new shells.
-
-To update later:
-
+**Anywhere else** (macOS, no `sudo`, no `apt`, ...), a dedicated venv always works and needs
+nothing preinstalled beyond Python itself:
 ```bash
-pipx upgrade ghunt-fixed
+python3 -m venv ~/.local/share/ghunt-fixed-venv
+~/.local/share/ghunt-fixed-venv/bin/pip install --upgrade pip
+~/.local/share/ghunt-fixed-venv/bin/pip install git+https://github.com/Iskandeur/ghunt-fixed.git
+mkdir -p ~/.local/bin
+ln -sf ~/.local/share/ghunt-fixed-venv/bin/ghunt ~/.local/bin/ghunt
 ```
-
-## Option B — plain virtual environment
-
-No pipx needed — this creates its own `.venv` folder next to the cloned repo:
-
-```bash
-git clone https://github.com/Iskandeur/ghunt-fixed.git
-cd ghunt-fixed
-python3 -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-pip install .
-```
-
-`ghunt` is now available as long as that venv is active. In any new terminal, reactivate it first:
-
-```bash
-cd ghunt-fixed
-source .venv/bin/activate
-```
-
-(Windows: replace the `source .venv/bin/activate` line with `.venv\Scripts\activate`.)
+`~/.local/bin` is already on `PATH` by default on most Linux distros and macOS; open a new terminal
+if `ghunt` isn't found right away. To update later, re-run the `pip install` line above.
 
 # 💃 Usage
 
