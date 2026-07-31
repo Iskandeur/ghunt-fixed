@@ -2,11 +2,21 @@
 
 <br>
 
-> **This is `ghunt-fixed`, a fork of [mxrch/GHunt](https://github.com/mxrch/GHunt), modified on 2026-07-31.**
+> **This is `ghunt-fixed`, a fork of [mxrch/GHunt](https://github.com/mxrch/GHunt), modified starting 2026-07-31.**
+>
 > The upstream PyPI release (2.3.4) crashes with `KeyError: 'container'` on some accounts because
-> Google's People API responses now sometimes omit `metadata.container`. This fork patches
-> `ghunt/parsers/people.py` to handle that missing key gracefully instead of crashing
-> (see [upstream PR #593](https://github.com/mxrch/GHunt/pull/593), not yet merged/released as of this fork).
+> Google's People API responses now sometimes omit `metadata.container`. This fork also submits
+> that fix upstream ([PR #603](https://github.com/mxrch/GHunt/pull/603)) and adds a few things on top:
+>
+> - **Crash fix**: every `metadata.container` lookup in the People parser is now guarded, plus a
+>   real bug where profile photos were mis-attributed to the wrong container.
+> - **Workspace/G Suite accounts**: `ghunt email` no longer hard-exits when there's no `PROFILE`
+>   container — it uses whatever container is actually available (e.g. `DOMAIN_PROFILE`).
+> - **Batch lookups**: `ghunt email -f addresses.txt [--json out_dir/]` runs a list of addresses
+>   instead of one at a time, skipping failures instead of aborting the whole batch.
+> - **Resilient parsing**: if Google changes the response shape again, the parser now isolates
+>   each field so one broken field logs a warning and gets skipped instead of crashing the run.
+>
 > Still licensed under AGPLv3, same as upstream — see [LICENSE.md](LICENSE.md).
 
 <br>
@@ -87,6 +97,14 @@ Options:
 ```bash
 $ ghunt email <email_address> --json user_data.json
 ```
+
+🔁 `ghunt-fixed` addition — batch lookup a list of addresses instead of one at a time:
+
+```bash
+$ ghunt email -f addresses.txt
+$ ghunt email -f addresses.txt --json results_dir/   # one JSON file per address
+```
+`addresses.txt` is one email address per line; lines starting with `#` are ignored.
 
 **Have fun 🥰💞**
 
