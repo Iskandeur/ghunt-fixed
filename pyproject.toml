@@ -1,5 +1,5 @@
 [project]
-name = "ghunt"
+name = "ghunt-fixed"
 version = "2.3.4"
 authors = [
     {name = "mxrch", email = "mxrch.dev@pm.me"},
@@ -24,13 +24,14 @@ ghunt = "ghunt.ghunt:main"
 include = ["ghunt", "ghunt.*"]
 
 [project.urls]
-"Homepage" = "https://github.com/mxrch/GHunt"
-"Bug Reports" = "https://github.com/mxrch/GHunt/issues"
+"Homepage" = "https://github.com/Iskandeur/ghunt-fixed"
+"Bug Reports" = "https://github.com/Iskandeur/ghunt-fixed/issues"
+"Upstream" = "https://github.com/mxrch/GHunt"
 "Funding" = "https://github.com/sponsors/mxrch"
-"Source" = "https://github.com/mxrch/GHunt"
+"Source" = "https://github.com/Iskandeur/ghunt-fixed"
 
 [tool.poetry]
-name = "ghunt"
+name = "ghunt-fixed"
 version = "2.3.4"
 description = "An offensive Google framework."
 authors = ["mxrch <mxrch.dev@pm.me>"]
