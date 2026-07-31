@@ -1,4 +1,5 @@
 import os
+import sys
 from typing import *
 
 import httpx
@@ -11,7 +12,9 @@ from ghunt.objects.base import GHuntCreds
 from ghunt.errors import GHuntInvalidSession
 
 
-async def check_and_login(as_client: httpx.AsyncClient, clean: bool=False) -> None:
+async def check_and_login(as_client: httpx.AsyncClient, clean: bool=False, non_interactive: bool=False,
+                           check: bool=False, oauth_token: str=None, master_token: str=None,
+                           json_file: Path=None) -> None:
     """Check the users credentials validity, and generate new ones."""
 
     ghunt_creds = GHuntCreds()
@@ -28,6 +31,13 @@ async def check_and_login(as_client: httpx.AsyncClient, clean: bool=False) -> No
     if not as_client:
         as_client = get_httpx_client()
 
+    # ghunt-fixed addition: never block on input() when automated. --check and
+    # explicit credentials always skip prompts; --non-interactive and a non-tty
+    # stdin (e.g. run from a script/cron/LLM harness) do too.
+    oauth_token = oauth_token or os.environ.get("GHUNT_OAUTH_TOKEN")
+    master_token = master_token or os.environ.get("GHUNT_MASTER_TOKEN")
+    non_interactive = non_interactive or check or bool(oauth_token) or bool(master_token) or not sys.stdin.isatty()
+
     is_session_valid = True
     try:
         ghunt_creds = await auth.load_and_auth(as_client, help=False)
@@ -35,7 +45,35 @@ async def check_and_login(as_client: httpx.AsyncClient, clean: bool=False) -> No
         print(f"[-] {e}\n")
         is_session_valid = False
 
-    if not is_session_valid:
+    if check:
+        status = {
+            "session_found": is_session_valid,
+            "master_token_valid": None,
+            "cookies_valid": None,
+            "osids_valid": None,
+            "session_valid": False,
+        }
+        if is_session_valid:
+            status["master_token_valid"] = await auth.check_master_token(as_client, ghunt_creds.android.master_token)
+            status["cookies_valid"] = await auth.check_cookies(as_client, ghunt_creds.cookies)
+            status["osids_valid"] = await auth.check_osids(as_client, ghunt_creds.cookies, ghunt_creds.osids)
+            status["session_valid"] = all([status["master_token_valid"], status["cookies_valid"], status["osids_valid"]])
+        await as_client.aclose()
+
+        if json_file:
+            write_json_output(status, json_file)
+        else:
+            gb.rc.print(status)
+        exit(os.EX_OK if status["session_valid"] else 1)
+
+    if oauth_token or master_token:
+        # Explicit credentials (flag or env var) always take priority: skip
+        # straight to regenerating the session below, no prompt needed.
+        pass
+    elif not is_session_valid:
+        if non_interactive:
+            await as_client.aclose()
+            exit("[-] No valid stored session, and no --oauth-token/--master-token (or GHUNT_OAUTH_TOKEN/GHUNT_MASTER_TOKEN) supplied. Can't authenticate in non-interactive mode.")
         oauth_token, master_token = auth.auth_dialog()
     else:
         # in case user wants to enter new creds (example: for new account)
@@ -56,6 +94,12 @@ async def check_and_login(as_client: httpx.AsyncClient, clean: bool=False) -> No
             print("[+] OSIDs seem valid !")
         else:
             print("[-] Seems like OSIDs are invalid.")
+
+        if non_interactive:
+            gb.rc.print("\n[+] Non-interactive mode : keeping the existing stored session.", style="italic")
+            await as_client.aclose()
+            exit(os.EX_OK)
+
         new_gen_inp = input("\nDo you want to create a new session ? (Y/n) ").lower()
         if new_gen_inp == "y":
             oauth_token, master_token = auth.auth_dialog()

@@ -19,6 +19,11 @@ def parse_and_run():
     ### Login module
     parser_login = subparsers.add_parser('login', help="Authenticate GHunt to Google.", formatter_class=RichHelpFormatter)
     parser_login.add_argument('--clean', action='store_true', help="Clear credentials local file.")
+    parser_login.add_argument('--non-interactive', action='store_true', help="Never prompt: keep the existing stored session as-is if one is found valid. Also triggered automatically when stdin isn't a TTY (e.g. run from a script/cron/LLM harness).")
+    parser_login.add_argument('--check', action='store_true', help="Report whether the stored session is valid and exit, without prompting or changing anything. Combine with --json to get a machine-readable status.")
+    parser_login.add_argument('--oauth-token', help="Authenticate non-interactively with an oauth_token (starts with \"oauth2_4/\"). Also settable via the GHUNT_OAUTH_TOKEN env var.")
+    parser_login.add_argument('--master-token', help="Authenticate non-interactively with a master_token (starts with \"aas_et/\"). Also settable via the GHUNT_MASTER_TOKEN env var.")
+    parser_login.add_argument('--json', type=Path, help="With --check, file to write the JSON status to (use '-' for stdout).")
 
     ### Email module
     parser_email = subparsers.add_parser('email', help="Get information on an email address.", formatter_class=RichHelpFormatter)
@@ -69,7 +74,8 @@ def process_args(args: argparse.Namespace):
     match args.module:
         case "login":
             from ghunt.modules import login
-            asyncio.run(login.check_and_login(None, args.clean))
+            asyncio.run(login.check_and_login(None, args.clean, args.non_interactive, args.check,
+                                               args.oauth_token, args.master_token, args.json))
         case "email":
             from ghunt.modules import email
             if args.file:
