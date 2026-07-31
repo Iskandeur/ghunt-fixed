@@ -135,20 +135,20 @@ def unicode_patch(txt: str):
 def show_version():
     new_version, new_metadata = check_new_version()
     print()
-    gb.rc.print(f"> GHunt {current_version.metadata.get('version', '')} ({current_version.metadata.get('name', '')}) <".center(53), style="bold")
+    gb.rc.print(f"> GHunt-Fixed {current_version.metadata.get('version', '')} ({current_version.metadata.get('name', '')}) <".center(53), style="bold")
     print()
     if new_version:
         gb.rc.print(f"🥳 New version {new_metadata.get('version', '')} ({new_metadata.get('name', '')}) is available !", style="bold red")
-        gb.rc.print(f"🤗 Run 'pipx upgrade ghunt' to update.", style="bold light_pink3")
+        gb.rc.print(f"🤗 Run 'pipx upgrade ghunt-fixed' to update.", style="bold light_pink3")
     else:
         gb.rc.print("🎉 You are up to date !", style="light_pink3")
-        
+
 
 def check_new_version() -> tuple[bool, dict[str, str]]:
     """
-        Checks if there is a new version of GHunt available.
+        Checks if there is a new version of ghunt-fixed available.
     """
-    req = httpx.get("https://raw.githubusercontent.com/mxrch/GHunt/master/ghunt/version.py")
+    req = httpx.get("https://raw.githubusercontent.com/Iskandeur/ghunt-fixed/master/ghunt/version.py")
     if req.status_code != 200:
         return False, {}
     
