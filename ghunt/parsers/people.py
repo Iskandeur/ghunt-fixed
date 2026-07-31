@@ -1,6 +1,7 @@
 from typing import *
 from datetime import datetime
 
+from ghunt import globals as gb
 from ghunt.errors import *
 from ghunt.helpers.utils import is_default_profile_pic, unicode_patch
 from ghunt.objects.apis import Parser
@@ -127,70 +128,107 @@ class Person(Parser):
         self.inAppReachability: Dict[str, PersonInAppReachability] = PersonContainers()
         self.extendedData: PersonExtendedData = PersonExtendedData()
 
+    def _warn_field_skipped(self, field_name: str, error: Exception):
+        """
+            Google's People API has changed its response shape under us more than
+            once (see e.g. the metadata.container removal). Rather than letting an
+            unexpected shape in one field crash the whole lookup, log it and move
+            on with whatever fields did parse successfully.
+        """
+        gb.rc.print(
+            f"[!] Couldn't parse the '{field_name}' field ({type(error).__name__}: {error}), skipping it.",
+            style="italic yellow"
+        )
+
     async def _scrape(self, as_client: httpx.AsyncClient, person_data: Dict[str, any]):
         self.personId = person_data.get("personId")
-        if person_data.get("email"):
-            for email_data in person_data["email"]:
-                if not (container := email_data.get("metadata", {}).get("container")):
-                    continue
-                person_email = PersonEmail()
-                person_email._scrape(email_data)
-                self.emails[container] = person_email
 
-        if person_data.get("name"):
-            for name_data in person_data["name"]:
-                if not (container := name_data.get("metadata", {}).get("container")):
-                    continue
-                person_name = PersonName()
-                person_name._scrape(name_data)
-                self.names[container] = person_name
+        try:
+            if person_data.get("email"):
+                for email_data in person_data["email"]:
+                    if not (container := email_data.get("metadata", {}).get("container")):
+                        continue
+                    person_email = PersonEmail()
+                    person_email._scrape(email_data)
+                    self.emails[container] = person_email
+        except Exception as e:
+            self._warn_field_skipped("email", e)
 
-        if person_data.get("readOnlyProfileInfo"):
-            for profile_data in person_data["readOnlyProfileInfo"]:
-                if not (container := profile_data.get("metadata", {}).get("container")):
-                    continue
-                person_profile = PersonProfileInfo()
-                person_profile._scrape(profile_data)
-                self.profileInfos[container] = person_profile
+        try:
+            if person_data.get("name"):
+                for name_data in person_data["name"]:
+                    if not (container := name_data.get("metadata", {}).get("container")):
+                        continue
+                    person_name = PersonName()
+                    person_name._scrape(name_data)
+                    self.names[container] = person_name
+        except Exception as e:
+            self._warn_field_skipped("name", e)
 
-        # Each photo carries its own container in its metadata, independent of
-        # readOnlyProfileInfo's containers, so it's keyed separately rather than
-        # nested in the loop above (that previously mis-attributed every photo
-        # to whichever profile container happened to be current in the outer loop).
-        if person_data.get("photo"):
-            for photo_data in person_data["photo"]:
-                if not (container := photo_data.get("metadata", {}).get("container")):
-                    continue
-                person_photo = PersonPhoto()
-                await person_photo._scrape(as_client, photo_data, "profile_photo")
-                self.profilePhotos[container] = person_photo
+        try:
+            if person_data.get("readOnlyProfileInfo"):
+                for profile_data in person_data["readOnlyProfileInfo"]:
+                    if not (container := profile_data.get("metadata", {}).get("container")):
+                        continue
+                    person_profile = PersonProfileInfo()
+                    person_profile._scrape(profile_data)
+                    self.profileInfos[container] = person_profile
+        except Exception as e:
+            self._warn_field_skipped("readOnlyProfileInfo", e)
 
-        if (source_ids := person_data.get("metadata", {}).get("identityInfo", {}).get("sourceIds")):
-            for source_ids_data in source_ids:
-                if not (container := source_ids_data.get("container")):
-                    continue
-                person_source_ids = PersonSourceIds()
-                person_source_ids._scrape(source_ids_data)
-                self.sourceIds[container] = person_source_ids
+        try:
+            # Each photo carries its own container in its metadata, independent of
+            # readOnlyProfileInfo's containers, so it's keyed separately rather than
+            # nested in the loop above (that previously mis-attributed every photo
+            # to whichever profile container happened to be current in the outer loop).
+            if person_data.get("photo"):
+                for photo_data in person_data["photo"]:
+                    if not (container := photo_data.get("metadata", {}).get("container")):
+                        continue
+                    person_photo = PersonPhoto()
+                    await person_photo._scrape(as_client, photo_data, "profile_photo")
+                    self.profilePhotos[container] = person_photo
+        except Exception as e:
+            self._warn_field_skipped("photo", e)
 
-        if person_data.get("coverPhoto"):
-            for cover_photo_data in person_data["coverPhoto"]:
-                if not (container := cover_photo_data.get("metadata", {}).get("container")):
-                    continue
-                person_cover_photo = PersonPhoto()
-                await person_cover_photo._scrape(as_client, cover_photo_data, "cover_photo")
-                self.coverPhotos[container] = person_cover_photo
+        try:
+            if (source_ids := person_data.get("metadata", {}).get("identityInfo", {}).get("sourceIds")):
+                for source_ids_data in source_ids:
+                    if not (container := source_ids_data.get("container")):
+                        continue
+                    person_source_ids = PersonSourceIds()
+                    person_source_ids._scrape(source_ids_data)
+                    self.sourceIds[container] = person_source_ids
+        except Exception as e:
+            self._warn_field_skipped("sourceIds", e)
 
-        if (apps_data := person_data.get("inAppReachability")):
-            containers_names = set()
-            for app_data in person_data["inAppReachability"]:
-                if (container := app_data.get("metadata", {}).get("container")):
-                    containers_names.add(container)
+        try:
+            if person_data.get("coverPhoto"):
+                for cover_photo_data in person_data["coverPhoto"]:
+                    if not (container := cover_photo_data.get("metadata", {}).get("container")):
+                        continue
+                    person_cover_photo = PersonPhoto()
+                    await person_cover_photo._scrape(as_client, cover_photo_data, "cover_photo")
+                    self.coverPhotos[container] = person_cover_photo
+        except Exception as e:
+            self._warn_field_skipped("coverPhoto", e)
 
-            for container_name in containers_names:
-                person_app_reachability = PersonInAppReachability()
-                person_app_reachability._scrape(apps_data, container_name)
-                self.inAppReachability[container_name] = person_app_reachability
+        try:
+            if (apps_data := person_data.get("inAppReachability")):
+                containers_names = set()
+                for app_data in person_data["inAppReachability"]:
+                    if (container := app_data.get("metadata", {}).get("container")):
+                        containers_names.add(container)
 
-        if (extended_data := person_data.get("extendedData")):
-            self.extendedData._scrape(extended_data)
+                for container_name in containers_names:
+                    person_app_reachability = PersonInAppReachability()
+                    person_app_reachability._scrape(apps_data, container_name)
+                    self.inAppReachability[container_name] = person_app_reachability
+        except Exception as e:
+            self._warn_field_skipped("inAppReachability", e)
+
+        try:
+            if (extended_data := person_data.get("extendedData")):
+                self.extendedData._scrape(extended_data)
+        except Exception as e:
+            self._warn_field_skipped("extendedData", e)
