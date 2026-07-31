@@ -1,4 +1,5 @@
 import os
+import re
 
 from ghunt import globals as gb
 from ghunt.helpers.utils import get_httpx_client
@@ -14,6 +15,52 @@ from typing import *
 from pathlib import Path
 
 
+async def hunt_many(addresses_file: Path, json_dir: Path=None):
+    """
+        Runs hunt() over every email address listed in addresses_file (one per line,
+        '#'-prefixed lines ignored), continuing past individual failures instead of
+        aborting the whole batch.
+    """
+    if not addresses_file.is_file():
+        exit(f"[-] File not found: {addresses_file}")
+
+    addresses = [
+        line.strip()
+        for line in addresses_file.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+    if not addresses:
+        exit(f"[-] No email addresses found in {addresses_file}")
+
+    if json_dir:
+        json_dir.mkdir(parents=True, exist_ok=True)
+
+    gb.rc.print(f"[+] Loaded {len(addresses)} email address(es) from {addresses_file}", style="bold")
+
+    failures = []
+    for index, address in enumerate(addresses, start=1):
+        gb.rc.print(f"\n{'=' * 60}\n[{index}/{len(addresses)}] {address}\n{'=' * 60}\n", style="bold plum2")
+
+        json_file = None
+        if json_dir:
+            safe_name = re.sub(r"[^\w.@+-]", "_", address)
+            json_file = json_dir / f"{safe_name}.json"
+
+        try:
+            await hunt(None, address, json_file)
+        except SystemExit:
+            # hunt() calls exit() when the target isn't found / has no usable
+            # public data — treat that as a per-address skip, not a batch abort.
+            failures.append(address)
+        except Exception as e:
+            gb.rc.print(f"[-] Unexpected error while processing {address}: {e}", style="bold red")
+            failures.append(address)
+
+    gb.rc.print(f"\n[+] Batch complete : {len(addresses) - len(failures)}/{len(addresses)} succeeded.", style="bold")
+    if failures:
+        gb.rc.print(f"[-] No usable data for : {', '.join(failures)}", style="italic")
+
+
 async def hunt(as_client: httpx.AsyncClient, email_address: str, json_file: Path=None):
     if not as_client:
         as_client = get_httpx_client()
@@ -27,6 +74,7 @@ async def hunt(as_client: httpx.AsyncClient, email_address: str, json_file: Path
     is_found, target = await people_pa.people_lookup(as_client, email_address, params_template="max_details")
     if not is_found:
         print("[-] The target wasn't found.")
+        await as_client.aclose()
         exit()
 
     if json_file:
@@ -41,6 +89,7 @@ async def hunt(as_client: httpx.AsyncClient, email_address: str, json_file: Path
 
     if not containers:
         print("[-] Given information does not match a public Google Account.")
+        await as_client.aclose()
         exit()
 
     if "PROFILE" in containers:

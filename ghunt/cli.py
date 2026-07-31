@@ -22,8 +22,10 @@ def parse_and_run():
 
     ### Email module
     parser_email = subparsers.add_parser('email', help="Get information on an email address.", formatter_class=RichHelpFormatter)
-    parser_email.add_argument("email_address")
-    parser_email.add_argument('--json', type=Path, help="File to write the JSON output to.")
+    email_group = parser_email.add_mutually_exclusive_group(required=True)
+    email_group.add_argument("email_address", nargs="?", help="A single email address to look up.")
+    email_group.add_argument("-f", "--file", type=Path, help="File containing one email address per line, to look up in batch.")
+    parser_email.add_argument('--json', type=Path, help="File to write the JSON output to (single lookup), or a directory to write one JSON file per address into (batch lookup with --file).")
 
     ### Gaia module
     parser_gaia = subparsers.add_parser('gaia', help="Get information on a Gaia ID.", formatter_class=RichHelpFormatter)
@@ -70,7 +72,10 @@ def process_args(args: argparse.Namespace):
             asyncio.run(login.check_and_login(None, args.clean))
         case "email":
             from ghunt.modules import email
-            asyncio.run(email.hunt(None, args.email_address, args.json))
+            if args.file:
+                asyncio.run(email.hunt_many(args.file, args.json))
+            else:
+                asyncio.run(email.hunt(None, args.email_address, args.json))
         case "gaia":
             from ghunt.modules import gaia
             asyncio.run(gaia.hunt(None, args.gaia_id, args.json))
