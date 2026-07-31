@@ -39,11 +39,19 @@ async def hunt(as_client: httpx.AsyncClient, email_address: str, json_file: Path
         for container in containers:
             print(f"- {container.title()}")
 
-    if not "PROFILE" in containers:
+    if not containers:
         print("[-] Given information does not match a public Google Account.")
         exit()
 
-    container = "PROFILE"
+    if "PROFILE" in containers:
+        container = "PROFILE"
+    else:
+        # No public consumer PROFILE container (typical for Workspace/G Suite
+        # accounts), but other containers (e.g. DOMAIN_PROFILE) still carry
+        # data GHunt already fetched. Use the first one instead of dropping
+        # the lookup entirely.
+        container = next(iter(containers))
+        print(f"[!] No 'PROFILE' container found, using '{container.title()}' instead (likely a Workspace/G Suite account, some fields may be limited).\n")
     
     gb.rc.print("🙋 Google Account data\n", style="plum2")
 
@@ -131,7 +139,7 @@ async def hunt(as_client: httpx.AsyncClient, email_address: str, json_file: Path
     if cal_found:
         print("[+] Public Google Calendar found !\n")
         if calendar_events.items:
-            if "PROFILE" in target.names:
+            if container in target.names:
                 gcalendar.out(calendar, calendar_events, email_address, target.names[container].fullname)
             else:
                 gcalendar.out(calendar, calendar_events, email_address)
@@ -141,24 +149,23 @@ async def hunt(as_client: httpx.AsyncClient, email_address: str, json_file: Path
         print("[-] No public Google Calendar.")
 
     if json_file:
-        if container == "PROFILE":
-            json_results[f"{container}_CONTAINER"] = {
-                "profile": target,
-                "play_games": player if player_results else None,
-                "maps": {
-                    "photos": None,
-                    "reviews": None,
-                    "stats": stats
-                },
-                "calendar": {
-                    "details": calendar,
-                    "events": calendar_events
-                } if cal_found else None
-            }
-        else:
-            json_results[f"{container}_CONTAINER"] = {
-                "profile": target
-            }
+        # Play Games / Maps / Calendar data is keyed by email address and
+        # personId, not by container, so it's included regardless of which
+        # container (PROFILE or otherwise, e.g. a Workspace DOMAIN_PROFILE) ended
+        # up being used above.
+        json_results[f"{container}_CONTAINER"] = {
+            "profile": target,
+            "play_games": player if player_results else None,
+            "maps": {
+                "photos": None,
+                "reviews": None,
+                "stats": stats
+            },
+            "calendar": {
+                "details": calendar,
+                "events": calendar_events
+            } if cal_found else None
+        }
 
     if json_file:
         import json
