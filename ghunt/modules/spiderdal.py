@@ -5,7 +5,7 @@ from pathlib import Path
 from ghunt import globals as gb
 from ghunt.objects.base import GHuntCreds
 from ghunt.objects.utils import TMPrinter
-from ghunt.helpers.utils import get_httpx_client
+from ghunt.helpers.utils import get_httpx_client, write_json_output
 from ghunt.apis.digitalassetslinks import DigitalAssetsLinksHttp
 from ghunt.helpers.playstore import app_exists
 
@@ -183,13 +183,9 @@ async def main(url: str, package: str, fingerprint: str, strict: bool, json_file
         gb.rc.print("\nNo packages found.", style="bright_black italic")
 
     if json_file:
-        import json
-        from ghunt.objects.encoders import GHuntEncoder;
-        with open(json_file, "w", encoding="utf-8") as f:
-            f.write(json.dumps({
-                "sites": sites,
-                "packages": pkgs
-            }, cls=GHuntEncoder, indent=4))
-        gb.rc.print(f"\n[+] JSON output wrote to {json_file} !\n", style="italic")
+        write_json_output({
+            "sites": sites,
+            "packages": pkgs
+        }, json_file)
     else:
         print()

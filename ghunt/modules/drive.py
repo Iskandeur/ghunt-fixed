@@ -197,10 +197,6 @@ async def hunt(as_client: httpx.AsyncClient, file_id: str, json_file: bool=Path)
             "comments": drive_comments if comments_found else None
         }
 
-        import json
-        from ghunt.objects.encoders import GHuntEncoder;
-        with open(json_file, "w", encoding="utf-8") as f:
-            f.write(json.dumps(json_results, cls=GHuntEncoder, indent=4))
-        gb.rc.print(f"\n[+] JSON output wrote to {json_file} !", style="italic")
+        write_json_output(json_results, json_file)
 
     await as_client.aclose()

@@ -1,7 +1,7 @@
 import os
 
 from ghunt import globals as gb
-from ghunt.helpers.utils import get_httpx_client
+from ghunt.helpers.utils import get_httpx_client, write_json_output
 from ghunt.apis.geolocation import GeolocationHttp
 from ghunt.helpers import auth
 
@@ -51,15 +51,12 @@ async def main(as_client: httpx.AsyncClient, bssid: str, input_file: Path, json_
     gb.rc.print(f"🗺️ [italic][link=https://www.google.com/maps/search/?q={resp.location.latitude},{resp.location.longitude}]Open in Google Maps[/link][/italic]\n", style=f"cornflower_blue")
 
     if json_file:
-        from ghunt.objects.encoders import GHuntEncoder;
-        with open(json_file, "w", encoding="utf-8") as f:
-            f.write(json.dumps({
-                "accuracy": resp.accuracy,
-                "latitude": resp.location.latitude,
-                "longitude": resp.location.longitude,
-                "address": raw_address,
-                "pretty_address": address
-            }, cls=GHuntEncoder, indent=4))
-        gb.rc.print(f"[+] JSON output wrote to {json_file} !", style="italic")
+        write_json_output({
+            "accuracy": resp.accuracy,
+            "latitude": resp.location.latitude,
+            "longitude": resp.location.longitude,
+            "address": raw_address,
+            "pretty_address": address
+        }, json_file)
 
     await as_client.aclose()

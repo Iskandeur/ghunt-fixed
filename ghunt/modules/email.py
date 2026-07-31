@@ -2,7 +2,7 @@ import os
 import re
 
 from ghunt import globals as gb
-from ghunt.helpers.utils import get_httpx_client
+from ghunt.helpers.utils import get_httpx_client, write_json_output, is_stdout_target
 from ghunt.objects.base import GHuntCreds
 from ghunt.apis.peoplepa import PeoplePaHttp
 from ghunt.apis.vision import VisionHttp
@@ -32,7 +32,8 @@ async def hunt_many(addresses_file: Path, json_dir: Path=None):
     if not addresses:
         exit(f"[-] No email addresses found in {addresses_file}")
 
-    if json_dir:
+    stdout_mode = is_stdout_target(json_dir)
+    if json_dir and not stdout_mode:
         json_dir.mkdir(parents=True, exist_ok=True)
 
     gb.rc.print(f"[+] Loaded {len(addresses)} email address(es) from {addresses_file}", style="bold")
@@ -42,7 +43,12 @@ async def hunt_many(addresses_file: Path, json_dir: Path=None):
         gb.rc.print(f"\n{'=' * 60}\n[{index}/{len(addresses)}] {address}\n{'=' * 60}\n", style="bold plum2")
 
         json_file = None
-        if json_dir:
+        if stdout_mode:
+            # Each address writes its own JSON document straight to stdout,
+            # back-to-back (no enclosing array) — fine for jq/streaming
+            # parsers, and for an LLM reading the whole output at once.
+            json_file = json_dir
+        elif json_dir:
             safe_name = re.sub(r"[^\w.@+-]", "_", address)
             json_file = json_dir / f"{safe_name}.json"
 
@@ -217,10 +223,6 @@ async def hunt(as_client: httpx.AsyncClient, email_address: str, json_file: Path
         }
 
     if json_file:
-        import json
-        from ghunt.objects.encoders import GHuntEncoder;
-        with open(json_file, "w", encoding="utf-8") as f:
-            f.write(json.dumps(json_results, cls=GHuntEncoder, indent=4))
-        gb.rc.print(f"\n[+] JSON output wrote to {json_file} !", style="italic")
+        write_json_output(json_results, json_file)
 
     await as_client.aclose()

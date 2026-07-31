@@ -26,6 +26,67 @@ def get_httpx_client() -> httpx.AsyncClient:
     return AsyncClient(http2=True, timeout=15)
     # return AsyncClient(http2=True, timeout=15, proxies="http://127.0.0.1:8282", verify=False)
 
+def is_stdout_target(json_file: Path) -> bool:
+    """Whether a --json argument means "write to stdout" rather than to a file."""
+    return json_file is not None and str(json_file) == "-"
+
+def wants_json_stdout(argv: List[str]) -> bool:
+    """Lightweight pre-parse of raw argv for --json -/--json=-, used before
+    argparse has run (banner/version-check print before any subcommand parsing)."""
+    for i, arg in enumerate(argv):
+        if arg == "--json" and i + 1 < len(argv) and argv[i + 1] == "-":
+            return True
+        if arg == "--json=-":
+            return True
+    return False
+
+def redirect_console_output_to_stderr() -> None:
+    """
+        Called when --json - was requested: repoints gb.rc and the print()
+        builtin at stderr, so stdout carries nothing but the final JSON
+        payload written via write_json_output() — safe to pipe into jq,
+        a script, or an LLM harness without any banner/progress noise mixed in.
+    """
+    import sys
+    import builtins
+    from rich.console import Console
+    from ghunt.objects.utils import TMPrinter
+
+    gb.rc = Console(highlight=False, file=sys.stderr)
+
+    # TMPrinter (used for in-place progress lines like "Dumped N events...")
+    # shares a single Console instance across every TMPrinter() call site via
+    # a mutable default argument, independent of gb.rc — redirect it too.
+    TMPrinter().rc.file = sys.stderr
+
+    if not getattr(builtins.print, "_ghunt_stderr_wrapped", False):
+        _orig_print = builtins.print
+        def _stderr_print(*args, **kwargs):
+            kwargs.setdefault("file", sys.stderr)
+            _orig_print(*args, **kwargs)
+        _stderr_print._ghunt_stderr_wrapped = True
+        builtins.print = _stderr_print
+
+def write_json_output(data: any, json_file: Path) -> None:
+    """
+        Writes `data` as JSON to json_file, using GHuntEncoder for GHunt objects.
+        If json_file is "-" (ghunt-fixed addition), writes straight to the real
+        stdout instead of a file, so it can be piped into other tools (jq, a
+        script, an LLM harness, ...) without touching the filesystem.
+    """
+    from ghunt.objects.encoders import GHuntEncoder
+    import sys
+
+    payload = json.dumps(data, cls=GHuntEncoder, indent=4)
+
+    if is_stdout_target(json_file):
+        sys.stdout.write(payload + "\n")
+        sys.stdout.flush()
+    else:
+        with open(json_file, "w", encoding="utf-8") as f:
+            f.write(payload)
+        gb.rc.print(f"\n[+] JSON output wrote to {json_file} !", style="italic")
+
 def oprint(obj: any) -> str:
     serialized = jsonpickle.encode(obj)
     pretty_output = json.dumps(json.loads(serialized), indent=2)

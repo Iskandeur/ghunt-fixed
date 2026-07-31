@@ -6,7 +6,7 @@ from ghunt.apis.peoplepa import PeoplePaHttp
 from ghunt.apis.vision import VisionHttp
 from ghunt.helpers import gmaps, auth, ia
 from ghunt.helpers.knowledge import get_user_type_definition
-from ghunt.helpers.utils import get_httpx_client
+from ghunt.helpers.utils import get_httpx_client, write_json_output
 
 import httpx
 
@@ -116,10 +116,6 @@ async def hunt(as_client: httpx.AsyncClient, gaia_id: str, json_file: Path=None)
             }
     
     if json_file:
-        import json
-        from ghunt.objects.encoders import GHuntEncoder;
-        with open(json_file, "w", encoding="utf-8") as f:
-            f.write(json.dumps(json_results, cls=GHuntEncoder, indent=4))
-        gb.rc.print(f"\n[+] JSON output wrote to {json_file} !", style="italic")
+        write_json_output(json_results, json_file)
 
     await as_client.aclose()
