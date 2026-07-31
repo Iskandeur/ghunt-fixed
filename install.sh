@@ -25,8 +25,22 @@ command -v python3 >/dev/null 2>&1 || die "python3 is required but wasn't found.
 PY_OK=$(python3 -c 'import sys; print(1 if sys.version_info >= (3, 10) else 0)')
 [ "$PY_OK" = "1" ] || die "Python 3.10+ is required. Found: $(python3 --version)."
 
+# Early versions of this installer registered the pipx app as "ghunt"
+# instead of "ghunt-fixed" (a since-fixed packaging bug). That old app
+# owns the `ghunt` binary symlink, which blocks pipx from linking the
+# correctly-named app - clean it up before installing/upgrading so the
+# symlink ends up pointing at the right venv.
+migrate_stale_pipx_app() {
+    command -v pipx >/dev/null 2>&1 || return 0
+    if pipx list --short 2>/dev/null | awk '{print $1}' | grep -qx "ghunt"; then
+        log "Found a stale 'ghunt' pipx app from an older version of this installer, removing it..."
+        pipx uninstall ghunt >/dev/null 2>&1 || true
+    fi
+}
+
 install_via_existing_pipx() {
     command -v pipx >/dev/null 2>&1 || return 1
+    migrate_stale_pipx_app
     log "pipx found, installing with it..."
     pipx install --force "git+${REPO_URL}"
     return 0
@@ -46,6 +60,7 @@ install_via_apt_pipx() {
 
     export PATH="$HOME/.local/bin:$PATH"
     pipx ensurepath >/dev/null 2>&1 || true
+    migrate_stale_pipx_app
     log "Installing ghunt-fixed with pipx..."
     pipx install --force "git+${REPO_URL}"
     return 0
