@@ -32,6 +32,15 @@
 >   with `EOFError`) when run from a script, cron job, or agent with no TTY attached. Add
 >   `--check` to get a JSON-able auth status with zero prompts, or `--oauth-token`/`--master-token`
 >   (or `GHUNT_OAUTH_TOKEN`/`GHUNT_MASTER_TOKEN` env vars) to script authentication end-to-end.
+> - **Retries transient network errors**: connection drops/timeouts and 429/502/503/504 responses
+>   are retried with exponential backoff instead of crashing the lookup immediately (upstream
+>   issues [#469](https://github.com/mxrch/GHunt/issues/469), [#464](https://github.com/mxrch/GHunt/issues/464)).
+> - **`ghunt update`**: checks for and applies updates using whichever install method is detected
+>   (pipx or the manual venv), instead of a static "run `pipx upgrade`" message that's wrong for
+>   half of install methods.
+> - **One-command install** ([`install.sh`](install.sh)) that works out of the box even where a
+>   plain `pip install pipx` fails with `externally-managed-environment` (PEP 668, the default on
+>   current Ubuntu/Debian) — see the Installation section below.
 >
 > Still licensed under AGPLv3, same as upstream — see [LICENSE.md](LICENSE.md). This fork stays
 > open under the same license; see [github.com/Iskandeur/ghunt-fixed](https://github.com/Iskandeur/ghunt-fixed)
@@ -142,19 +151,28 @@ The extension is available on the following stores :\
 
 Then, profit :
 ```bash
-Usage: ghunt [-h] {login,email,gaia,drive,geolocate} ...
+Usage: ghunt [-h] {login,email,gaia,drive,geolocate,spiderdal,update} ...
 
 Positional Arguments:
-  {login,email,gaia,drive,geolocate}
+  {login,email,gaia,drive,geolocate,spiderdal,update}
     login               Authenticate GHunt to Google.
     email               Get information on an email address.
     gaia                Get information on a Gaia ID.
     drive               Get information on a Drive file or folder.
     geolocate           Geolocate a BSSID.
     spiderdal           Find assets using Digital Assets Links.
+    update              Check for and apply ghunt-fixed updates.
 
 Options:
   -h, --help            show this help message and exit
+```
+
+🔁 `ghunt-fixed` addition — `ghunt update` checks for and applies updates using whichever install
+method it detects (pipx or the manual venv), so you don't need to remember which upgrade command
+matches how you installed it:
+```bash
+ghunt update            # applies the update if one is available
+ghunt update --check    # only reports whether one is available, doesn't apply it
 ```
 
 📄 You can also use --json with email, gaia, drive and geolocate modules to export in JSON ! Example :

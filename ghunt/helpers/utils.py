@@ -193,6 +193,30 @@ def unicode_patch(txt: str):
     }
     return txt.replace(''.join([*bad_chars.keys()]), ''.join([*bad_chars.values()]))
 
+def detect_install_method() -> tuple[str, str]:
+    """
+        Best-effort detection of how ghunt-fixed was installed, so update
+        guidance (and `ghunt update`) can suggest, or run, the right command
+        instead of always assuming pipx.
+        Returns (method, path) where method is "pipx", "venv", or "unknown".
+    """
+    import sys
+    prefix = sys.prefix
+    if "pipx" in Path(prefix).parts:
+        return "pipx", prefix
+    if Path(prefix).name == "ghunt-fixed-venv":
+        return "venv", prefix
+    return "unknown", prefix
+
+def upgrade_command_hint() -> str:
+    """A copy-pasteable command to upgrade ghunt-fixed, matching how it was installed."""
+    method, path = detect_install_method()
+    if method == "pipx":
+        return "pipx upgrade ghunt-fixed"
+    if method == "venv":
+        return f"{path}/bin/pip install --upgrade git+https://github.com/Iskandeur/ghunt-fixed.git"
+    return "ghunt update  (or: pip install --upgrade git+https://github.com/Iskandeur/ghunt-fixed.git)"
+
 def show_version():
     new_version, new_metadata = check_new_version()
     print()
@@ -200,7 +224,7 @@ def show_version():
     print()
     if new_version:
         gb.rc.print(f"🥳 New version {new_metadata.get('version', '')} ({new_metadata.get('name', '')}) is available !", style="bold red")
-        gb.rc.print(f"🤗 Run 'pipx upgrade ghunt-fixed' to update.", style="bold light_pink3")
+        gb.rc.print(f"🤗 Run '{upgrade_command_hint()}' to update.", style="bold light_pink3")
     else:
         gb.rc.print("🎉 You are up to date !", style="light_pink3")
 

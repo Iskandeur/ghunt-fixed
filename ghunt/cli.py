@@ -49,6 +49,11 @@ def parse_and_run():
     geolocate_group.add_argument("-f", "--file", type=Path,  help="File containing a raw request body, useful to put many BSSIDs. ([italic light_steel_blue1][link=https://developers.google.com/maps/documentation/geolocation/requests-geolocation?#sample-requests]Reference format[/link][/italic light_steel_blue1])")
     parser_geolocate.add_argument('--json', type=Path, help="File to write the JSON output to.")
 
+    ### Update module (ghunt-fixed addition)
+    parser_update = subparsers.add_parser('update', help="Check for and apply ghunt-fixed updates.", formatter_class=RichHelpFormatter)
+    parser_update.add_argument('--check', action='store_true', help="Only report whether an update is available, without applying it.")
+    parser_update.add_argument('--json', type=Path, help="With --check, file to write the JSON status to (use '-' for stdout).")
+
     ### Spiderdal module
     parser_spiderdal = subparsers.add_parser('spiderdal', help="Find assets using Digital Assets Links.", formatter_class=RichHelpFormatter)
     parser_spiderdal.add_argument("-p", "--package", help="Example: com.squareup.cash")
@@ -96,3 +101,6 @@ def process_args(args: argparse.Namespace):
                 exit("[!] You must provide both a package name and a certificate fingerprint.")
             from ghunt.modules import spiderdal
             asyncio.run(spiderdal.main(args.url, args.package, args.fingerprint, args.strict, args.json))
+        case "update":
+            from ghunt.modules import update
+            update.run(args.check, args.json)
