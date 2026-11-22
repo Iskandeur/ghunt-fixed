@@ -2,6 +2,7 @@ import asyncio
 import json
 import base64
 import os
+import ssl
 from typing import *
 
 import httpx
@@ -16,6 +17,21 @@ from ghunt.helpers.knowledge import get_domain_of_service, get_package_sig
 from ghunt.knowledge.services import services_baseurls
 from ghunt.helpers.auth import *
 
+
+# Google's android.googleapis.com/auth rejects the default OpenSSL 3 TLS fingerprint
+# with "Error=BadAuthentication", even for valid tokens. Same workaround as gpsoauth:
+# a fixed cipher list over HTTP/1.1.
+_ANDROID_AUTH_CIPHERS = (
+    "ECDH+AESGCM:ECDH+CHACHA20:DH+AESGCM:DH+CHACHA20:ECDH+AES:DH+AES:"
+    "RSA+AESGCM:RSA+AES:!aNULL:!eNULL:!MD5:!DSS"
+)
+
+async def _android_auth_post(data: dict) -> httpx.Response:
+    ctx = ssl.create_default_context()
+    ctx.set_ciphers(_ANDROID_AUTH_CIPHERS)
+    async with httpx.AsyncClient(http2=False, timeout=15, verify=ctx) as client:
+        return await client.post("https://android.googleapis.com/auth", data=data,
+                                 headers={"User-Agent": "GoogleAuth/1.4"})
 
 async def android_master_auth(as_client: httpx.AsyncClient, oauth_token: str) -> Tuple[str, List[str], str, str]:
     """
@@ -34,11 +50,11 @@ async def android_master_auth(as_client: httpx.AsyncClient, oauth_token: str) ->
         "droidguard_results": "dummy123", # https://github.com/simon-weber/gpsoauth/blob/429b7f99fa268315cef7a981408a612fb424a79b/gpsoauth/__init__.py#L153
     }
 
-    req = await as_client.post("https://android.googleapis.com/auth", data=data)
+    req = await _android_auth_post(data)
     resp = parse_oauth_flow_response(req.text)
     for keyword in ["Token", "Email", "services", "firstName", "lastName"]:
         if keyword not in resp:
-            raise GHuntAndroidMasterAuthError(f'Expected "{keyword}" in the response of the Android Master Authentication.\nThe oauth_token may be expired.')
+            raise GHuntAndroidMasterAuthError(f'Expected "{keyword}" in the response of the Android Master Authentication.\nThe oauth_token may be expired.\nGoogle answered: HTTP {req.status_code} {req.text.strip()[:200]}')
     return resp["Token"], resp["services"].split(","), resp["Email"], f'{resp["firstName"]} {resp["lastName"]}'
 
 async def android_oauth_app(as_client: httpx.AsyncClient, master_token: str,
@@ -58,11 +74,11 @@ async def android_oauth_app(as_client: httpx.AsyncClient, master_token: str,
         "Token": master_token
     }
 
-    req = await as_client.post("https://android.googleapis.com/auth", data=data)
+    req = await _android_auth_post(data)
     resp = parse_oauth_flow_response(req.text)
     for keyword in ["Expiry", "grantedScopes", "Auth"]:
         if keyword not in resp:
-            raise GHuntAndroidAppOAuth2Error(f'Expected "{keyword}" in the response of the Android App OAuth2 Authentication.\nThe master token may be revoked.')
+            raise GHuntAndroidAppOAuth2Error(f'Expected "{keyword}" in the response of the Android App OAuth2 Authentication.\nThe master token may be revoked.\nGoogle answered: HTTP {req.status_code} {req.text.strip()[:200]}')
     return resp["Auth"], resp["grantedScopes"].split(" "), int(resp["Expiry"])
 
 async def gen_osid(as_client: httpx.AsyncClient, cookies: Dict[str, str], generated_osids: dict[str, str], service: str) -> None:
@@ -171,34 +187,53 @@ def auth_dialog() -> Tuple[Dict[str, str], str] :
         Launch the dialog that asks the user
         how he want to generate its credentials.
     """
-    choices = ("You can facilitate configuring GHunt by using the GHunt Companion extension on Firefox, Chrome, Edge and Opera here :\n"
-                "=> https://github.com/mxrch/ghunt_companion\n\n"
-                "[1] (Companion) Put GHunt on listening mode (currently not compatible with docker)\n"
-                "[2] (Companion) Paste base64-encoded authentication\n"
-                "[3] Enter the oauth_token (starts with \"oauth2_4/\")\n"
-                "[4] Enter the master token (starts with \"aas_et/\")\n"
+    from ghunt.helpers import browser_login
+
+    choices = ("How do you want to log in ?\n\n"
+                "[1] Browser, automatic (recommended) : opens Chrome/Edge, you sign in, done\n"
+                "[2] Browser, manual : any browser, you copy one cookie (works everywhere)\n"
+                "[3] (Companion extension) Put GHunt on listening mode (not compatible with docker)\n"
+                "[4] (Companion extension) Paste base64-encoded authentication\n"
+                "[5] Enter the oauth_token (starts with \"oauth2_4/\")\n"
+                "[6] Enter the master token (starts with \"aas_et/\")\n"
                 "Choice => ")
 
     oauth_token = ""
     master_token = ""
-    choice = input(choices)
-    if choice in ["1", "2"]:
-        if choice == "1":
+    choice = input(choices).strip()
+    if choice == "1":
+        try:
+            oauth_token = browser_login.auto_flow()
+        except (RuntimeError, TimeoutError, ConnectionError, OSError) as e:
+            print(f"[-] Automatic browser login failed : {e}")
+            print("[*] Falling back to the manual browser login.")
+            oauth_token = browser_login.manual_flow()
+
+    elif choice == "2":
+        oauth_token = browser_login.manual_flow()
+
+    elif choice in ["3", "4"]:
+        if choice == "3":
             received_data = listener.run()
-        elif choice == "2":
+        else:
             received_data = input("Paste the encoded credentials here => ")
         data = json.loads(base64.b64decode(received_data))
         oauth_token = data["oauth_token"]
 
-    elif choice == "3":
+    elif choice == "5":
         oauth_token = input(f"OAuth token => ").strip('" ')
 
-    elif choice == "4":
+    elif choice == "6":
         master_token = input(f"Master token => ").strip('" ')
 
     else:
         print("Please choose a valid choice. Exiting...")
         exit()
+
+    if oauth_token:
+        error = browser_login.check_token(oauth_token)
+        if error:
+            exit(f"[-] {error}")
 
     return oauth_token, master_token
 

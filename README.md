@@ -23,6 +23,10 @@
 >   the whole lookup.
 >
 > **New features:**
+> - **Login without the browser extension**: `ghunt login` can now open Chrome/Edge itself and grab
+>   the token once you sign in (`ghunt login --browser`), or guide you through copying one cookie by
+>   hand. Stale single-use tokens are detected with a clear message instead of `BadAuthentication`.
+>   See [Login](#login).
 > - **Batch lookups**: `ghunt email -f addresses.txt` runs a list of addresses instead of one at a
 >   time, skipping failures instead of aborting the whole batch.
 > - **Machine-readable stdout**: pass `-` to `--json` on any module (`--json -`) to write pure JSON
@@ -130,22 +134,40 @@ if `ghunt` isn't found right away. To update later, re-run the `pip install` lin
 
 ## Login
 
-First, launch the listener by doing `ghunt login` and choose between 1 of the 2 first methods :
+No browser extension needed anymore. Run:
 ```bash
 ghunt login
 
-[1] (Companion) Put GHunt on listening mode (currently not compatible with docker)
-[2] (Companion) Paste base64-encoded cookies
-[3] Enter manually all cookies
-
-Choice =>
+[1] Browser, automatic (recommended) : opens Chrome/Edge, you sign in, done
+[2] Browser, manual : any browser, you copy one cookie (works everywhere)
+[3] (Companion extension) Put GHunt on listening mode (not compatible with docker)
+[4] (Companion extension) Paste base64-encoded authentication
+[5] Enter the oauth_token (starts with "oauth2_4/")
+[6] Enter the master token (starts with "aas_et/")
 ```
 
-Then, use GHunt Companion to complete the login.
+- **[1] Automatic** (or `ghunt login --browser`): GHunt opens Chrome, Edge, Brave or Chromium with
+  a fresh, temporary profile. Sign in to Google there, and GHunt picks up the token by itself, then
+  closes the window and deletes the profile. Set `GHUNT_BROWSER` to a browser executable to pick
+  a specific one. If no browser is found or it fails, GHunt falls back to [2].
+- **[2] Manual**: works with any browser, including over SSH or in Docker. GHunt opens
+  [accounts.google.com/EmbeddedSetup](https://accounts.google.com/EmbeddedSetup); sign in in a
+  **private window**, then copy the `oauth_token` cookie of `accounts.google.com` from the DevTools
+  (F12 → Application/Storage → Cookies) and paste it.
 
-The extension is available on the following stores :\
-\
-[![Firefox](https://files.catbox.moe/5g2ld5.png)](https://addons.mozilla.org/en-US/firefox/addon/ghunt-companion/)&nbsp;&nbsp;&nbsp;[![Chrome](https://developer.chrome.com/static/docs/webstore/branding/image/206x58-chrome-web-bcb82d15b2486.png)](https://chrome.google.com/webstore/detail/ghunt-companion/dpdcofblfbmmnikcbmmiakkclocadjab)
+> [!NOTE]
+> The `oauth_token` works **only once** and expires within minutes. ghunt-fixed remembers a hash of
+> every token it used and tells you right away if you paste or receive a stale one, instead of
+> failing with a cryptic `BadAuthentication`. This is the usual reason the original
+> [GHunt Companion](https://github.com/mxrch/ghunt_companion) extension "stops working": it caches
+> the token and keeps resending the old one. The original extension is also Manifest V2, which
+> Chrome is phasing out.
+
+The original extension (options [3] and [4]) still works with ghunt-fixed. A maintained Manifest V3
+replacement, [ghunt-fixed Companion](https://github.com/Iskandeur/ghunt-fixed-companion), always
+fetches a fresh token and never caches it; it uses the same options [3] and [4].
+
+Use a secondary Google account if you can: GHunt makes automated requests with this session.
 
 ## Modules
 

@@ -14,7 +14,7 @@ from ghunt.errors import GHuntInvalidSession
 
 async def check_and_login(as_client: httpx.AsyncClient, clean: bool=False, non_interactive: bool=False,
                            check: bool=False, oauth_token: str=None, master_token: str=None,
-                           json_file: Path=None) -> None:
+                           json_file: Path=None, browser: bool=False) -> None:
     """Check the users credentials validity, and generate new ones."""
 
     ghunt_creds = GHuntCreds()
@@ -66,6 +66,10 @@ async def check_and_login(as_client: httpx.AsyncClient, clean: bool=False, non_i
             gb.rc.print(status)
         exit(os.EX_OK if status["session_valid"] else 1)
 
+    if browser and not (oauth_token or master_token):
+        from ghunt.helpers import browser_login
+        oauth_token = browser_login.auto_flow()
+
     if oauth_token or master_token:
         # Explicit credentials (flag or env var) always take priority: skip
         # straight to regenerating the session below, no prompt needed.
@@ -109,8 +113,13 @@ async def check_and_login(as_client: httpx.AsyncClient, clean: bool=False, non_i
     ghunt_creds.android.authorization_tokens = {} # Reset the authorization tokens
 
     if oauth_token:
-        print(f"\n[+] Got OAuth2 token => {oauth_token}")
-        master_token, services, owner_email, owner_name = await auth.android_master_auth(as_client, oauth_token)
+        from ghunt.helpers import browser_login
+        print(f"\n[+] Got OAuth2 token => {oauth_token[:16]}... (hidden)")
+        try:
+            master_token, services, owner_email, owner_name = await auth.android_master_auth(as_client, oauth_token)
+        finally:
+            # Single-use token: remember it (hashed) so a stale resend gets a clear error next time.
+            browser_login.remember_used_token(oauth_token)
 
         print("\n[Connected account]")
         print(f"Name : {owner_name}")

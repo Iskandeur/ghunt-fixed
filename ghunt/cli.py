@@ -23,6 +23,7 @@ def parse_and_run():
     parser_login.add_argument('--check', action='store_true', help="Report whether the stored session is valid and exit, without prompting or changing anything. Combine with --json to get a machine-readable status.")
     parser_login.add_argument('--oauth-token', help="Authenticate non-interactively with an oauth_token (starts with \"oauth2_4/\"). Also settable via the GHUNT_OAUTH_TOKEN env var.")
     parser_login.add_argument('--master-token', help="Authenticate non-interactively with a master_token (starts with \"aas_et/\"). Also settable via the GHUNT_MASTER_TOKEN env var.")
+    parser_login.add_argument('--browser', action='store_true', help="Log in through a temporary Chrome/Edge window: sign in, and GHunt grabs the token by itself. No extension needed.")
     parser_login.add_argument('--json', type=Path, help="With --check, file to write the JSON status to (use '-' for stdout).")
 
     ### Email module
@@ -80,7 +81,8 @@ def process_args(args: argparse.Namespace):
         case "login":
             from ghunt.modules import login
             asyncio.run(login.check_and_login(None, args.clean, args.non_interactive, args.check,
-                                               args.oauth_token, args.master_token, args.json))
+                                               args.oauth_token, args.master_token, args.json,
+                                               args.browser))
         case "email":
             from ghunt.modules import email
             if args.file:
